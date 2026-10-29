@@ -10,6 +10,7 @@ Test:
     pytest
 """
 
+import re
 import sqlite3
 from contextlib import closing
 from datetime import date
@@ -21,6 +22,14 @@ from pydantic import BaseModel, field_validator
 DB_PATH = Path(__file__).parent / "habits.db"
 
 app = FastAPI(title="Habit Tracker")
+
+# Strict ISO calendar date: YYYY-MM-DD with ASCII-only digits
+# We use [0-9] rather than \d to prevent matching Unicode/non-ASCII digits.
+# We use \A and \Z rather than ^ and $ because $ matches before a trailing newline.
+ISO_DATE_REGEX = re.compile(r"\A[0-9]{4}-[0-9]{2}-[0-9]{2}\Z")
+
+# Invisible and zero-width characters that appear blank in user interfaces
+INVISIBLE_CHARS_REGEX = re.compile(r"[\u200B-\u200D\uFEFF\u2060\u00A0]")
 
 
 def get_db() -> sqlite3.Connection:
@@ -51,22 +60,43 @@ class HabitIn(BaseModel):
     name: str
 
     @field_validator("name")
-    def validate_name(cls, v: str) -> str:
-        trimmed = v.strip()
-        if not trimmed:
-            raise ValueError("Habit name cannot be empty")
-        return trimmed
+    @classmethod
+    def validate_habit_name(cls, v: str) -> str:
+        if not isinstance(v, str):
+            raise TypeError("Habit name must be a string")
+        # Strip whitespace and invisible zero-width characters
+        cleaned = INVISIBLE_CHARS_REGEX.sub("", v).strip()
+        if not cleaned:
+            raise ValueError(
+                "Habit name cannot be empty or contain only invisible characters"
+            )
+        if len(cleaned) > 100:
+            raise ValueError("Habit name cannot exceed 100 characters")
+        return cleaned
 
 
 class CheckinIn(BaseModel):
-    day: str  # ISO date, e.g. "2026-09-22"
+    day: str  # Strictly formatted ISO calendar date: YYYY-MM-DD
 
     @field_validator("day")
-    def validate_day(cls, v: str) -> str:
+    @classmethod
+    def validate_checkin_day(cls, v: str) -> str:
+        if not isinstance(v, str):
+            raise TypeError("Day must be a string")
+        # Strict ASCII YYYY-MM-DD regex check.
+        # This is load-bearing: Python 3.11+ date.fromisoformat() also accepts
+        # basic ISO (20260922) and ISO week dates (2026-W39-2), which break
+        # string-based day lookups and streak calculations.
+        if not ISO_DATE_REGEX.match(v):
+            raise ValueError(
+                "Day must strictly follow YYYY-MM-DD format with ASCII digits (e.g. '2026-09-22')"
+            )
         try:
             date.fromisoformat(v)
         except ValueError:
-            raise ValueError("Invalid date format. Expected YYYY-MM-DD")
+            raise ValueError(
+                f"'{v}' is not a valid calendar date (e.g. check month/day bounds or leap year)"
+            )
         return v
 
 
