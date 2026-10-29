@@ -1,3 +1,5 @@
+from datetime import date, timedelta
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -35,4 +37,32 @@ def test_checkin_flow():
 
 def test_checkin_unknown_habit_404():
     r = client.post("/habits/99999/checkin", json={"day": "2026-09-22"})
+    assert r.status_code == 404
+
+
+def test_streak_zero_when_no_checkins():
+    hid = client.post("/habits", json={"name": "Meditate"}).json()["id"]
+    r = client.get(f"/habits/{hid}/streak")
+    assert r.status_code == 200
+    assert r.json() == {"habit_id": hid, "streak": 0}
+
+
+def test_streak_consecutive_days():
+    hid = client.post("/habits", json={"name": "Walk 10k steps"}).json()["id"]
+    today = date.today()
+    client.post(f"/habits/{hid}/checkin", json={"day": today.isoformat()})
+    client.post(
+        f"/habits/{hid}/checkin", json={"day": (today - timedelta(days=1)).isoformat()}
+    )
+    client.post(
+        f"/habits/{hid}/checkin", json={"day": (today - timedelta(days=2)).isoformat()}
+    )
+
+    r = client.get(f"/habits/{hid}/streak")
+    assert r.status_code == 200
+    assert r.json()["streak"] == 3
+
+
+def test_streak_unknown_habit_404():
+    r = client.get("/habits/99999/streak")
     assert r.status_code == 404
