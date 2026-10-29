@@ -15,7 +15,7 @@ from contextlib import closing
 from datetime import date, timedelta
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel
 
 DB_PATH = Path(__file__).parent / "habits.db"
@@ -53,6 +53,11 @@ class HabitIn(BaseModel):
 
 class CheckinIn(BaseModel):
     day: str  # ISO date, e.g. "2026-09-22"
+
+
+class StreakOut(BaseModel):
+    habit_id: int
+    streak: int
 
 
 @app.post("/habits")
@@ -96,8 +101,26 @@ def list_checkins(habit_id: int):
     return [r["day"] for r in rows]
 
 
-@app.get("/habits/{habit_id}/streak")
-def get_habit_streak(habit_id: int):
+@app.get("/habits/{habit_id}/streak", response_model=StreakOut)
+def get_habit_streak(
+    habit_id: int,
+    today: str | None = Query(
+        default=None,
+        description="Reference ISO date (YYYY-MM-DD) for client timezone support. Defaults to server date.",
+    ),
+):
+    """Calculate the consecutive daily check-in streak up to and including today."""
+    if today is not None:
+        try:
+            anchor_date = date.fromisoformat(today)
+        except ValueError:
+            raise HTTPException(
+                status_code=422,
+                detail="Invalid date format for 'today'. Expected YYYY-MM-DD.",
+            )
+    else:
+        anchor_date = date.today()
+
     with closing(get_db()) as conn:
         habit = conn.execute(
             "SELECT id FROM habits WHERE id = ?", (habit_id,)
@@ -105,12 +128,12 @@ def get_habit_streak(habit_id: int):
         if habit is None:
             raise HTTPException(status_code=404, detail="unknown habit")
         rows = conn.execute(
-            "SELECT day FROM checkins WHERE habit_id = ?", (habit_id,)
+            "SELECT DISTINCT day FROM checkins WHERE habit_id = ?", (habit_id,)
         ).fetchall()
         days = {r["day"] for r in rows}
 
     streak = 0
-    current_day = date.today()
+    current_day = anchor_date
     while current_day.isoformat() in days:
         streak += 1
         current_day -= timedelta(days=1)
