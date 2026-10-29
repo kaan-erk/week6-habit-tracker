@@ -12,10 +12,11 @@ Test:
 
 import sqlite3
 from contextlib import closing
+from datetime import date
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 DB_PATH = Path(__file__).parent / "habits.db"
 
@@ -49,9 +50,24 @@ init_db()
 class HabitIn(BaseModel):
     name: str
 
+    @field_validator("name")
+    def validate_name(cls, v: str) -> str:
+        trimmed = v.strip()
+        if not trimmed:
+            raise ValueError("Habit name cannot be empty")
+        return trimmed
+
 
 class CheckinIn(BaseModel):
     day: str  # ISO date, e.g. "2026-09-22"
+
+    @field_validator("day")
+    def validate_day(cls, v: str) -> str:
+        try:
+            date.fromisoformat(v)
+        except ValueError:
+            raise ValueError("Invalid date format. Expected YYYY-MM-DD")
+        return v
 
 
 @app.post("/habits")
