@@ -1,0 +1,94 @@
+================================================================================
+DETERMINISTIC GUARDRAILS VERIFICATION EVIDENCE
+Student: Kaan Erk Toraman (220901564)
+Date: 2026-10-29
+================================================================================
+
+1. BLACK FORMATTING GUARDRAIL
+Command: black --check .
+What it catches: Inconsistent spacing, line lengths, non-standard Python formatting.
+Failure demonstration:
+black.exe : would reformat temp_format_test.py
+At line:4 char:13
++ $blackOut = & .\.venv\Scripts\black.exe --check temp_format_test.py 2 ...
++             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (would reformat temp_format_test.py:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+Oh no! \U0001f4a5 \U0001f494 \U0001f4a5
+1 file would be reformatted.
+
+
+2. RUFF LINTING GUARDRAIL
+Command: ruff check .
+What it catches: Unused imports, undefined variables, syntax violations, code smells.
+Failure demonstration:
+I001 [*] Import block is un-sorted or un-formatted
+ --> temp_lint_test.py:1:1
+  |
+1 | / import sys
+2 | | import os
+  | |_________^
+help: Organize imports
+  |
+1 + import os
+2 | import sys
+  - import os
+3 |
+  |
+
+F401 [*] `sys` imported but unused
+ --> temp_lint_test.py:1:8
+  |
+1 | import sys
+  |        ^^^
+2 | import os
+  |
+help: Remove unused import: `sys`
+  |
+  - import sys
+1 | import os
+  |
+
+F401 [*] `os` imported but unused
+ --> temp_lint_test.py:2:8
+  |
+1 | import sys
+2 | import os
+  |        ^^
+help: Remove unused import: `os`
+  |
+1 | import sys
+  - import os
+2 |
+  |
+
+Found 3 errors.
+[*] 3 fixable with `--fix`.
+
+
+3. PYTEST TESTING GUARDRAIL
+Command: pytest -v
+What it catches: Regression errors, functional bugs, broken contracts, missing status codes.
+Failure demonstration:
+============================= test session starts =============================
+platform win32 -- Python 3.12.3, pytest-9.2.0, pluggy-1.7.0
+rootdir: C:\Users\USER\Desktop\NLP2
+plugins: anyio-4.15.1, platformdirs-4.14.0
+collected 1 item
+
+temp_test.py F                                                           [100%]
+
+================================== FAILURES ===================================
+__________________________________ test_fail __________________________________
+
+    def test_fail():
+>       assert 1 == 2
+E       assert 1 == 2
+
+temp_test.py:2: AssertionError
+=========================== short test summary info ===========================
+FAILED temp_test.py::test_fail - assert 1 == 2
+============================== 1 failed in 0.04s ==============================
+
